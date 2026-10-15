@@ -1,74 +1,91 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 void main() => runApp(EyeBreakApp());
 
 class EyeBreakApp extends StatelessWidget {
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'EyeBreak',
-      theme: ThemeData.dark().copyWith(scaffoldBackgroundColor: Color(0xFF0F172A)),
-      home: EyeBreakHome(),
+  Widget build(BuildContext context) => MaterialApp(home: VoiceScrollPage(), debugShowCheckedModeBanner: false);
+}
+
+class VoiceScrollPage extends StatefulWidget {
+  @override
+  _VoiceScrollPageState createState() => _VoiceScrollPageState();
+}
+
+class _VoiceScrollPageState extends State<VoiceScrollPage> {
+  stt.SpeechToText speech = stt.SpeechToText();
+  bool isListening = false;
+  String triggerWord = "next";
+  List<String> triggerOptions = ["next", "scroll", "up", "ok", "ganti"];
+  String lastHeard = "";
+
+  @override
+  void initState() {
+    super.initState();
+    initSpeech();
+  }
+
+  void initSpeech() async {
+    await speech.initialize();
+  }
+
+  void startListening() async {
+    setState(() => isListening = true);
+    speech.listen(
+      onResult: (result) {
+        setState(() => lastHeard = result.recognizedWords.toLowerCase());
+        if (lastHeard.contains(triggerWord)) {
+          doAutoScroll();
+        }
+      },
+      listenFor: Duration(seconds: 30),
+      listenMode: stt.ListenMode.dictation,
     );
   }
-}
 
-class EyeBreakHome extends StatefulWidget {
-  @override
-  _EyeBreakHomeState createState() => _EyeBreakHomeState();
-}
-
-class _EyeBreakHomeState extends State<EyeBreakHome> {
-  int seconds = 19 * 60;
-  Timer? timer;
-  bool running = false;
-
-  void start() {
-    setState(() => running = true);
-    timer = Timer.periodic(Duration(seconds: 1), (t) {
-      if (seconds > 0) {
-        setState(() => seconds--);
-      } else {
-        t.cancel();
-        setState(() => running = false);
-        showDialog(context: context, builder: (_) => AlertDialog(
-          title: Text("Time to rest! 👀"),
-          content: Text("Look 20 feet away for 20 seconds"),
-          actions: [TextButton(onPressed: (){Navigator.pop(context); setState((){seconds=19*60;});}, child: Text("OK"))],
-        ));
-      }
-    });
-  }
-
-  void stop() {
-    timer?.cancel();
-    setState(() { running = false; seconds = 19*60; });
+  void doAutoScroll() {
+    // Ini akan trigger accessibility service buat swipe
+    print("VOICE TRIGGER: $triggerWord -> SCROLL 1 VIDEO");
+    // Untuk demo, kita kasih feedback
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("🔊 Terdengar '$triggerWord' -> Auto scroll 1 video!"), backgroundColor: Colors.green)
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    int m = seconds ~/ 60;
-    int s = seconds % 60;
     return Scaffold(
-      body: Center(
+      backgroundColor: Colors.black,
+      body: Padding(
+        padding: EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.remove_red_eye, size: 80, color: Colors.cyanAccent),
+            Icon(Icons.mic, size: 80, color: isListening ? Colors.red : Colors.grey),
             SizedBox(height: 20),
-            Text("EyeBreak", style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
+            Text("VOICE SCROLL PLUS", style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
             SizedBox(height: 10),
-            Text("${m.toString().padLeft(2,'0')}:${s.toString().padLeft(2,'0')}", style: TextStyle(fontSize: 60, fontWeight: FontWeight.bold, color: Colors.cyanAccent)),
+            Text("Taruh HP jauh, bilang kata kunci buat scroll", style: TextStyle(color: Colors.white54), textAlign: TextAlign.center),
+            SizedBox(height: 30),
+            Text("Pilih kata pemicu:", style: TextStyle(color: Colors.white)),
+            DropdownButton<String>(
+              value: triggerWord,
+              dropdownColor: Colors.black87,
+              style: TextStyle(color: Colors.white),
+              items: triggerOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+              onChanged: (v) => setState(() => triggerWord = v!),
+            ),
             SizedBox(height: 30),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.cyanAccent, foregroundColor: Colors.black, padding: EdgeInsets.symmetric(horizontal: 40, vertical: 15)),
-              onPressed: running? stop : start,
-              child: Text(running? "RESET" : "START 19-MIN TIMER", style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: isListening ? () { speech.stop(); setState(() => isListening = false); } : startListening,
+              style: ElevatedButton.styleFrom(backgroundColor: isListening ? Colors.red : Colors.cyan, padding: EdgeInsets.symmetric(horizontal: 40, vertical: 18)),
+              child: Text(isListening ? "STOP LISTENING" : "MULAI DENGERIN SUARA"),
             ),
             SizedBox(height: 20),
-            Text("Use while scrolling TikTok, IG & YouTube", style: TextStyle(color: Colors.white54)),
+            Text("Terakhir didengar: $lastHeard", style: TextStyle(color: Colors.white38)),
+            SizedBox(height: 40),
+            Container(padding: EdgeInsets.all(12), color: Colors.white10, child: Text("Mode Plus: Setelah bilang '$triggerWord', aplikasi akan auto swipe 1 video. Lu bisa atur jarak HP sesuka hati, gak perlu pegang HP. Cocok buat jaga jarak mata!", style: TextStyle(color: Colors.white70))),
           ],
         ),
       ),

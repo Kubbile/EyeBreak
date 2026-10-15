@@ -1,4 +1,4 @@
-name: Build_APK
+name: build_apk
 on: [push]
 jobs:
   build:

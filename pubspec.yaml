@@ -11,6 +11,13 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.2
 
+  dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  speech_to_text: ^6.6.2
+  flutter_accessibility_service: ^0.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

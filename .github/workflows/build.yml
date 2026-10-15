@@ -1,4 +1,4 @@
-name: build_apk
+name: Build APK
 on: [push]
 jobs:
   build:
@@ -14,5 +14,5 @@ jobs:
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
         with:
-          name: EyeBreak-APK
+          name: eye_break-APK
           path: build/app/outputs/flutter-apk/app-release.apk

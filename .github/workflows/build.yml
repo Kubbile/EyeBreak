@@ -10,7 +10,7 @@ jobs:
           flutter-version: '3.22.0'
       - run: flutter pub get
       - run: |
-          sed -i 's/name: EyeBreak/name: eyebreak/' pubspec.yaml
+          sed -i 's/name: eye_break/name: eyebreak/' pubspec.yaml
           flutter create . --platforms=android
       - run: flutter pub get
       - run: flutter build apk --release

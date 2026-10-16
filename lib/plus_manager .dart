@@ -1,43 +1,21 @@
-import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:math';
 
 class PlusManager {
+  static String generateCode() {
+    var r = Random();
+    return 'EBPLUS5K-${r.nextInt(9000) + 1000}';
+  }
+
   static Future<bool> isPlus() async {
-    final prefs = await SharedPreferences.getInstance();
-    bool isPlus = prefs.getBool('isPlus') ?? false;
-    int expiry = prefs.getInt('plusExpiry') ?? 0;
-    if (!isPlus) return false;
-    if (DateTime.now().millisecondsSinceEpoch > expiry) {
-      await prefs.setBool('isPlus', false);
-      return false;
-    }
-    return true;
+    var p = await SharedPreferences.getInstance();
+    return p.getBool('isPlus') ?? false;
   }
 
   static Future<bool> activate(String code) async {
-    String c = code.toUpperCase().trim();
-    // Kode valid: EBPLUS5K, PLUS-MAKASSAR, atau apapun yg depannya PLUS-
-    if (c == "EBPLUS5K" || c == "PLUS-MAKASSAR" || c.startsWith("PLUS-")) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('isPlus', true);
-      int expiry = DateTime.now().add(Duration(days: 30)).millisecondsSinceEpoch;
-      await prefs.setInt('plusExpiry', expiry);
-      return true;
-    }
-    return false;
-  }
-
-  static String generateCode() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    Random rnd = Random();
-    String gen(int n) => String.fromCharCodes(Iterable.generate(n, (_) => chars.codeUnitAt(rnd.nextInt(chars.length))));
-    return "PLUS-${gen(4)}-${gen(4)}";
-  }
-
-  static Future<int> getDaysLeft() async {
-    final prefs = await SharedPreferences.getInstance();
-    int expiry = prefs.getInt('plusExpiry') ?? 0;
-    int diff = expiry - DateTime.now().millisecondsSinceEpoch;
-    return (diff / (1000 * 60 * 60 * 24)).ceil();
+    if (!code.contains('EBPLUS5K')) return false;
+    var p = await SharedPreferences.getInstance();
+    await p.setBool('isPlus', true);
+    return true;
   }
 }

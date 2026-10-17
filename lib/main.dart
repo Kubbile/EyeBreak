@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -7,13 +6,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 void main() {
-  runApp(const EyeBreakApp());
+  runApp(
+    const EyeBreakApp(),
+  );
 }
 
 class EyeBreakApp extends StatelessWidget {
-  const EyeBreakApp({super.key});
+  const EyeBreakApp({
+    super.key,
+  });
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'EyeBreak',
@@ -21,365 +27,710 @@ class EyeBreakApp extends StatelessWidget {
         primarySwatch: Colors.deepPurple,
         textTheme: GoogleFonts.poppinsTextTheme(),
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        scaffoldBackgroundColor: const Color(
+          0xFFF5F3FF,
+        ),
       ),
-      home: const MainScreen(),
+      home: const EyeBreakHome(),
     );
   }
 }
 
-class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+class EyeBreakHome extends StatefulWidget {
+  const EyeBreakHome({
+    super.key,
+  });
+
   @override
-  State<MainScreen> createState() => _MainScreenState();
+  State<EyeBreakHome> createState() => _EyeBreakHomeState();
 }
 
-class _MainScreenState extends State<MainScreen> {
-  int _index = 0;
-  Timer? _timer;
-  int _workSeconds = 20 * 60;
-  int _remaining = 20 * 60;
-  bool _isRunning = false;
-  bool _isBreak = false;
-  int _breakSeconds = 20;
-  int _breakRemaining = 20;
-  int _completedSessions = 0;
-  int _totalFocusMinutes = 0;
-  List<Map<String, dynamic>> _history = [];
-  int _selectedWorkMinutes = 20;
-  List<int> _workOptions = [1, 20, 30, 45, 60];
+class _EyeBreakHomeState extends State<EyeBreakHome> {
+  int currentIndex = 0;
+  Timer? workTimer;
+  int workSeconds = 20 * 60;
+  int totalSeconds = 20 * 60;
+  bool isWorking = false;
+  bool isBreakTime = false;
+  int breakSeconds = 20;
+  int streak = 0;
+  int totalSessions = 0;
+  List<int> weeklyData = [
+    2,
+    3,
+    5,
+    4,
+    6,
+    3,
+    5,
+  ];
+  List<String> todayHistory = [];
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    loadData();
   }
 
-  Future<void> _loadData() async {
+  Future<void> loadData() async {
     final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _completedSessions = prefs.getInt('sessions')?? 0;
-      _totalFocusMinutes = prefs.getInt('focusMinutes')?? 0;
-      _selectedWorkMinutes = prefs.getInt('workMinutes')?? 20;
-      _workSeconds = _selectedWorkMinutes * 60;
-      _remaining = _workSeconds;
-      final hist = prefs.getString('history');
-      if (hist!= null) {
-        _history = List<Map<String, dynamic>>.from(jsonDecode(hist));
-      }
-    });
-  }
-
-  Future<void> _saveData() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('sessions', _completedSessions);
-    await prefs.setInt('focusMinutes', _totalFocusMinutes);
-    await prefs.setInt('workMinutes', _selectedWorkMinutes);
-    await prefs.setString('history', jsonEncode(_history));
-  }
-
-  void _startTimer() {
-    if (_isRunning) return;
-    setState(() => _isRunning = true);
-    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      setState(() {
-        if (!_isBreak) {
-          if (_remaining > 0) {
-            _remaining--;
-          } else {
-            _isBreak = true;
-            _breakRemaining = _breakSeconds;
-            _showBreakDialog();
-          }
-        } else {
-          if (_breakRemaining > 0) {
-            _breakRemaining--;
-          } else {
-            _completeSession();
-          }
-        }
-      });
-    });
-  }
-
-  void _pauseTimer() {
-    _timer?.cancel();
-    setState(() => _isRunning = false);
-  }
-
-  void _resetTimer() {
-    _timer?.cancel();
-    setState(() {
-      _isRunning = false;
-      _isBreak = false;
-      _remaining = _workSeconds;
-      _breakRemaining = _breakSeconds;
-    });
-  }
-
-  void _completeSession() {
-    _timer?.cancel();
-    final now = DateTime.now();
-    setState(() {
-      _isRunning = false;
-      _isBreak = false;
-      _remaining = _workSeconds;
-      _completedSessions++;
-      _totalFocusMinutes += _selectedWorkMinutes;
-      _history.add({
-        'date': now.toIso8601String(),
-        'duration': _selectedWorkMinutes,
-        'type': 'focus',
-      });
-      if (_history.length > 50) _history.removeAt(0);
-    });
-    _saveData();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Great! Sesi selesai, mata kamu aman! 👁️'), backgroundColor: Colors.green),
+    setState(
+      () {
+        streak = prefs.getInt(
+              'streak',
+            ) ??
+            0;
+        totalSessions = prefs.getInt(
+              'total',
+            ) ??
+            0;
+        todayHistory = prefs.getStringList(
+              'history',
+            ) ??
+            [];
+      },
     );
   }
 
-  void _showBreakDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('WAKTUNYA BREAK! 👀'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.visibility, size: 80, color: Colors.deepPurple),
-            const SizedBox(height: 16),
-            Text('Lihat objek sejauh 20 kaki (6 meter) selama $_breakSeconds detik', textAlign: TextAlign.center, style: const TextStyle(fontSize: 16)),
-            const SizedBox(height: 20),
-            Text('$_breakRemaining', style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.deepPurple)),
-            const SizedBox(height: 10),
-            const Text('Jangan lihat HP!', style: TextStyle(color: Colors.red)),
-          ],
-        ),
+  Future<void> saveData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(
+      'streak',
+      streak,
+    );
+    await prefs.setInt(
+      'total',
+      totalSessions,
+    );
+    await prefs.setStringList(
+      'history',
+      todayHistory,
+    );
+  }
+
+  void startWork() {
+    setState(
+      () {
+        isWorking = true;
+        isBreakTime = false;
+      },
+    );
+    workTimer?.cancel();
+    workTimer = Timer.periodic(
+      const Duration(
+        seconds: 1,
       ),
+      (t) {
+        if (workSeconds > 0) {
+          setState(
+            () => workSeconds--,
+          );
+        } else {
+          t.cancel();
+          startBreak();
+        }
+      },
     );
-    Future.delayed(Duration(seconds: _breakSeconds), () {
-      if (mounted) Navigator.of(context).pop();
-    });
+  }
+
+  void startBreak() {
+    final now = DateFormat(
+      'HH:mm',
+    ).format(
+      DateTime.now(),
+    );
+    setState(
+      () {
+        isBreakTime = true;
+        breakSeconds = 20;
+        totalSessions++;
+        streak++;
+        todayHistory.insert(
+          0,
+          'Sesi selesai jam $now',
+        );
+        if (todayHistory.length > 10) {
+          todayHistory.removeLast();
+        }
+      },
+    );
+    saveData();
+    workTimer = Timer.periodic(
+      const Duration(
+        seconds: 1,
+      ),
+      (t) {
+        if (breakSeconds > 0) {
+          setState(
+            () => breakSeconds--,
+          );
+        } else {
+          t.cancel();
+          setState(
+            () {
+              isWorking = false;
+              isBreakTime = false;
+              workSeconds = 20 * 60;
+            },
+          );
+        }
+      },
+    );
+  }
+
+  void pauseTimer() {
+    workTimer?.cancel();
+    setState(
+      () => isWorking = false,
+    );
+  }
+
+  void resetTimer() {
+    workTimer?.cancel();
+    setState(
+      () {
+        workSeconds = 20 * 60;
+        isWorking = false;
+        isBreakTime = false;
+      },
+    );
+  }
+
+  String formatTime(
+    int s,
+  ) {
+    int m = s ~/ 60;
+    int sec = s % 60;
+    return '${m.toString().padLeft(
+      2,
+      '0',
+    )}:${sec.toString().padLeft(
+      2,
+      '0',
+    )}';
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    workTimer?.cancel();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return Scaffold(
-      body: [
-        _buildHome(),
-        _buildStats(),
-        _buildSettings(),
-      ][_index],
+      backgroundColor: const Color(
+        0xFFF5F3FF,
+      ),
+      appBar: AppBar(
+        title: Text(
+          'EyeBreak',
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        backgroundColor: Colors.deepPurple,
+        foregroundColor: Colors.white,
+        centerTitle: true,
+      ),
+      body: currentIndex == 0
+          ? buildTimerPage()
+          : currentIndex == 1
+              ? buildStatsPage()
+              : buildExtraInfo(),
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _index,
-        onTap: (i) => setState(() => _index = i),
+        currentIndex: currentIndex,
+        onTap: (i) => setState(
+          () => currentIndex = i,
+        ),
         selectedItemColor: Colors.deepPurple,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.timer), label: 'Timer'),
-          BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Statistik'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Setting'),
+          BottomNavigationBarItem(
+            icon: Icon(
+              Icons.timer,
+            ),
+            label: 'Timer',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(
+              Icons.bar_chart,
+            ),
+            label: 'Statistik',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(
+              Icons.lightbulb,
+            ),
+            label: 'Tips',
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildHome() {
-    double progress = _isBreak? (_breakRemaining / _breakSeconds) : (_remaining / _workSeconds);
-    int displaySeconds = _isBreak? _breakRemaining : _remaining;
-    String statusText = _isBreak? 'BREAK TIME' : (_isRunning? 'FOCUS TIME' : 'READY');
-    Color statusColor = _isBreak? Colors.green : Colors.deepPurple;
-
+  Widget buildTimerPage() {
+    double progress = 1 - (workSeconds / totalSeconds);
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(
+          20,
+        ),
         child: Column(
           children: [
-            const SizedBox(height: 20),
-            Text('EYEBREAK', style: GoogleFonts.poppins(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 3, color: Colors.deepPurple)),
-            Text('20-20-20 Rule', style: TextStyle(color: Colors.grey[600])),
-            const SizedBox(height: 40),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(
+                  20,
+                ),
+              ),
+              child: Text(
+                DateFormat(
+                  'EEEE, dd MMM yyyy',
+                ).format(
+                  DateTime.now(),
+                ),
+                style: const TextStyle(
+                  color: Colors.grey,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            const SizedBox(
+              height: 25,
+            ),
             Stack(
               alignment: Alignment.center,
               children: [
                 SizedBox(
-                  width: 250,
-                  height: 250,
+                  width: 260,
+                  height: 260,
                   child: CircularProgressIndicator(
-                    value: progress,
-                    strokeWidth: 12,
-                    backgroundColor: Colors.grey[200],
-                    valueColor: AlwaysStoppedAnimation(statusColor),
+                    value: isWorking ? progress : 0,
+                    strokeWidth: 14,
+                    backgroundColor: Colors.deepPurple.withOpacity(
+                      0.08,
+                    ),
+                    valueColor: const AlwaysStoppedAnimation(
+                      Colors.deepPurple,
+                    ),
                   ),
                 ),
-                Column(
-                  children: [
-                    Text(statusText, style: TextStyle(fontWeight: FontWeight.bold, color: statusColor, letterSpacing: 2)),
-                    const SizedBox(height: 8),
-                    Text('${(displaySeconds ~/ 60).toString().padLeft(2, '0')}:${(displaySeconds % 60).toString().padLeft(2, '0')}', style: const TextStyle(fontSize: 52, fontWeight: FontWeight.bold)),
-                    Text(_isBreak? 'Lihat jauh!' : 'Jangan lihat dekat terus', style: TextStyle(color: Colors.grey[600])),
-                  ],
+                Container(
+                  width: 220,
+                  height: 220,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.deepPurple.withOpacity(
+                          0.1,
+                        ),
+                        blurRadius: 20,
+                        spreadRadius: 5,
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        isBreakTime
+                            ? Icons.visibility
+                            : Icons.timer_outlined,
+                        size: 56,
+                        color: isBreakTime
+                            ? Colors.orange
+                            : Colors.deepPurple,
+                      ),
+                      const SizedBox(
+                        height: 12,
+                      ),
+                      Text(
+                        isBreakTime
+                            ? 'ISTIRAHAT!'
+                            : formatTime(
+                                workSeconds,
+                              ),
+                        style: GoogleFonts.poppins(
+                          fontSize: 38,
+                          fontWeight: FontWeight.bold,
+                          color: isBreakTime
+                              ? Colors.orange
+                              : Colors.deepPurple,
+                        ),
+                      ),
+                      Text(
+                        isBreakTime
+                            ? '${breakSeconds}s lihat jauh'
+                            : 'Fokus 20 menit',
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-                        const SizedBox(height: 50),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (!_isRunning)
-                  ElevatedButton.icon(
-                    onPressed: _startTimer,
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text('MULAI'),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))),
-                  ),
-                if (_isRunning)
-                  ElevatedButton.icon(
-                    onPressed: _pauseTimer,
-                    icon: const Icon(Icons.pause),
-                    label: const Text('PAUSE'),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))),
-                  ),
-                const SizedBox(width: 16),
-                OutlinedButton.icon(
-                  onPressed: _resetTimer,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('RESET'),
-                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))),
+            const SizedBox(
+              height: 30,
+            ),
+            Container(
+              padding: const EdgeInsets.all(
+                14,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(
+                  12,
                 ),
-              ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _statItem(
+                    'Streak',
+                    '$streak hari',
+                    Icons.local_fire_department,
+                  ),
+                  Container(
+                    width: 1,
+                    height: 30,
+                    color: Colors.grey.shade200,
+                  ),
+                  _statItem(
+                    'Total',
+                    '$totalSessions sesi',
+                    Icons.check_circle,
+                  ),
+                  Container(
+                    width: 1,
+                    height: 30,
+                    color: Colors.grey.shade200,
+                  ),
+                  _statItem(
+                    'Hari ini',
+                    '${weeklyData.last} sesi',
+                    Icons.today,
+                  ),
+                ],
+              ),
             ),
             const Spacer(),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    Column(children: [const Icon(Icons.check_circle, color: Colors.green), Text('$_completedSessions', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)), const Text('Sesi')]),
-                    Column(children: [const Icon(Icons.timer_outlined, color: Colors.blue), Text('$_totalFocusMinutes', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)), const Text('Menit')]),
-                    Column(children: [const Icon(Icons.favorite, color: Colors.red), const Text('Sehat', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)), const Text('Mata')]),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStats() {
-    Map<String, int> dailyCount = {};
-    for (var h in _history) {
-      final date = DateFormat('dd/MM').format(DateTime.parse(h['date']));
-      dailyCount[date] = (dailyCount[date]?? 0) + 1;
-    }
-    final spots = dailyCount.entries.toList().asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value.value.toDouble())).toList();
-
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: ListView(
-          children: [
-            const SizedBox(height: 10),
-            const Text('Statistik Mata Kamu', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
             Row(
               children: [
-                Expanded(child: Card(color: Colors.deepPurple, child: Padding(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Total Sesi', style: TextStyle(color: Colors.white70)), Text('$_completedSessions', style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold))])))),
-                const SizedBox(width: 12),
-                Expanded(child: Card(color: Colors.green, child: Padding(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Total Fokus', style: TextStyle(color: Colors.white70)), Text('${_totalFocusMinutes}m', style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold))])))),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: isWorking
+                        ? pauseTimer
+                        : startWork,
+                    icon: Icon(
+                      isWorking
+                          ? Icons.pause
+                          : Icons.play_arrow,
+                    ),
+                    label: Text(
+                      isWorking
+                          ? 'Pause'
+                          : 'Mulai Fokus',
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 18,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
+                          14,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(
+                  width: 12,
+                ),
+                ElevatedButton(
+                  onPressed: resetTimer,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.deepPurple,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 18,
+                      horizontal: 22,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
+                        14,
+                      ),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.refresh,
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 20),
-            const Text('Grafik 7 Hari Terakhir', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            SizedBox(
-              height: 200,
-              child: dailyCount.isEmpty? const Center(child: Text('Belum ada data')) : LineChart(LineChartData(lineBarsData: [LineChartBarData(spots: spots.isEmpty? [const FlSpot(0, 0)] : spots, isCurved: true, color: Colors.deepPurple, barWidth: 4, dotData: const FlDotData(show: true))], titlesData: const FlTitlesData(show: true), gridData: const FlGridData(show: true), borderData: FlBorderData(show: true))),
-            ),
-            const SizedBox(height: 20),
-            const Text('Riwayat', style: TextStyle(fontWeight: FontWeight.bold)),
-           ..._history.reversed.take(20).map((h) => Card(child: ListTile(leading: const Icon(Icons.visibility, color: Colors.deepPurple), title: Text('${h['duration']} menit fokus'), subtitle: Text(DateFormat('dd MMM HH:mm').format(DateTime.parse(h['date']))), trailing: const Icon(Icons.check, color: Colors.green)))),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSettings() {
+  Widget _statItem(
+    String label,
+    String value,
+    IconData icon,
+  ) {
+    return Column(
+      children: [
+        Icon(
+          icon,
+          size: 18,
+          color: Colors.deepPurple,
+        ),
+        const SizedBox(
+          height: 4,
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+            color: Colors.deepPurple,
+          ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            color: Colors.grey,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget buildStatsPage() {
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: ListView(
-          children: [
-            const Text('Pengaturan', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            const Text('Durasi Fokus (menit)', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 10,
-              children: _workOptions.map((m) => ChoiceChip(label: Text('$m menit'), selected: _selectedWorkMinutes == m, onSelected: (v) { if (v) { setState(() { _selectedWorkMinutes = m; _workSeconds = m * 60; _remaining = _workSeconds; }); _saveData(); _resetTimer(); }})).toList(),
+      child: ListView(
+        padding: const EdgeInsets.all(
+          20,
+        ),
+        children: [
+          const Text(
+            'Statistik Mingguan',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
             ),
-            const SizedBox(height: 30),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                                          const Row(children: [Icon(Icons.info, color: Colors.deepPurple), SizedBox(width: 8), Text('Apa itu 20-20-20?', style: TextStyle(fontWeight: FontWeight.bold))]),
-                    const SizedBox(height: 10),
-                    const Text('Setiap 20 menit melihat layar, istirahatkan mata selama 20 detik dengan melihat objek sejauh 20 kaki (6 meter).'),
-                    const SizedBox(height: 10),
-                    const Text('Mencegah lelah dan kering'),
-                  ],
+          ),
+          const SizedBox(
+            height: 20,
+          ),
+          Container(
+            height: 240,
+            padding: const EdgeInsets.all(
+              16,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(
+                20,
+              ),
+            ),
+            child: BarChart(
+              BarChartData(
+                barGroups: List.generate(
+                  7,
+                  (i) {
+                    return BarChartGroupData(
+                      x: i,
+                      barRods: [
+                        BarChartRodData(
+                          toY: weeklyData[i].toDouble(),
+                          color: Colors.deepPurple,
+                          width: 18,
+                          borderRadius: BorderRadius.circular(
+                            6,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                borderData: FlBorderData(
+                  show: false,
+                ),
+                gridData: const FlGridData(
+                  show: false,
+                ),
+                titlesData: FlTitlesData(
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (
+                        v,
+                        m,
+                      ) {
+                        const days = [
+                          'Sen',
+                          'Sel',
+                          'Rab',
+                          'Kam',
+                          'Jum',
+                          'Sab',
+                          'Min',
+                        ];
+                        return Text(
+                          days[v.toInt()],
+                          style: const TextStyle(
+                            fontSize: 11,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  leftTitles: const AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: false,
+                    ),
+                  ),
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: false,
+                    ),
+                  ),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: false,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-            _tipCard(Icons.water_drop, 'Minum Air Putih', 'Dehidrasi bikin mata kering. Minum 8 gelas sehari.'),
-          _tipCard(Icons.light_mode, 'Pencahayaan Cukup', 'Jangan main HP di gelap. Lampu harus terang.'),
-          _tipCard(Icons.distance, 'Jarak Ideal', 'Jarak HP 40-60cm dari mata.'),
-          _tipCard(Icons.blur_on, 'Kedipkan Mata', 'Sengaja kedip tiap 5 detik.'),
-          _tipCard(Icons.nightlight, 'Mode Malam', 'Aktifkan blue light filter jam 7 malam.'),
-          _tipCard(Icons.sports_gymnastics, 'Senam Mata', 'Putar bola mata 10x searah jarum jam.'),
-          _tipCard(Icons.timer_off, 'Aturan 20-20-20', '20 menit layar, 20 detik lihat jauh.'),
-          _tipCard(Icons.visibility_off, 'Istirahat Total', 'Setiap 2 jam, tutup mata 5 menit.'),
-          _tipCard(Icons.phone_android, 'Atur Kecerahan', 'Jangan 100%, 60-70% cukup.'),
-          _tipCard(Icons.healing, 'Kompres Hangat', 'Kalau lelah, kompres hangat 1 menit.'),
+          ),
         ],
       ),
     );
   }
 
-  Widget _tipCard(IconData icon, String title, String desc) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: ListTile(
-        leading: Icon(icon, color: Colors.deepPurple),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-        subtitle: Text(desc, style: const TextStyle(fontSize: 12)),
+  Widget buildExtraInfo() {
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.all(
+          20,
+        ),
+        children: [
+          const Text(
+            'Tips Kesehatan Mata',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+            ),
+          ),
+          const SizedBox(
+            height: 18,
+          ),
+          _tipCard(
+            Icons.water_drop,
+            'Minum Air',
+            '8 gelas sehari',
+          ),
+          _tipCard(
+            Icons.light_mode,
+            'Pencahayaan',
+            'Jangan gelap',
+          ),
+          _tipCard(
+            Icons.distance,
+            'Jarak 50cm',
+            '40-60cm ideal',
+          ),
+          _tipCard(
+            Icons.blur_on,
+            'Kedip',
+            'Tiap 5 detik',
+          ),
+          _tipCard(
+            Icons.nightlight,
+            'Mode Malam',
+            'Blue light filter',
+          ),
+          _tipCard(
+            Icons.sports_gymnastics,
+            'Senam Mata',
+            'Putar bola mata',
+          ),
+          _tipCard(
+            Icons.timer_off,
+            '20-20-20',
+            '20 menit lihat jauh',
+          ),
+          _tipCard(
+            Icons.visibility_off,
+            'Tutup Mata',
+            '5 menit tiap 2 jam',
+          ),
+          _tipCard(
+            Icons.phone_android,
+            'Kecerahan',
+            '60-70% cukup',
+          ),
+          _tipCard(
+            Icons.healing,
+            'Kompres',
+            '1 menit hangat',
+          ),
+        ],
       ),
     );
   }
 
-  Widget _exerciseItem(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Text(text, style: const TextStyle(fontSize: 13)),
+  Widget _tipCard(
+    IconData icon,
+    String title,
+    String desc,
+  ) {
+    return Card(
+      margin: const EdgeInsets.only(
+        bottom: 12,
+      ),
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(
+          14,
+        ),
+      ),
+      child: ListTile(
+        leading: Icon(
+          icon,
+          color: Colors.deepPurple,
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
+        subtitle: Text(
+          desc,
+          style: const TextStyle(
+            fontSize: 12,
+          ),
+        ),
+      ),
     );
   }
 }
